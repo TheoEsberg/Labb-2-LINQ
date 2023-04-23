@@ -1,6 +1,7 @@
 ﻿using Labb_2_LINQ.Data;
 using Labb_2_LINQ.Models;
 using Microsoft.EntityFrameworkCore;
+using Spectre.Console;
 using System.Security.Cryptography.X509Certificates;
 using System.Xml.Linq;
 
@@ -10,99 +11,191 @@ namespace Labb_2_LINQ
     {
         static void Main(string[] args)
         {
-            //WriteDataToDatabase();
+            MainMenu();
+        }
 
-            GetStudentsFromSubject("Math");
+        private static void MainMenu()
+        {
+            var choise = AnsiConsole.Prompt(
+                new SelectionPrompt<string>()
+                .Title("Main menu!")
+                .AddChoices(
+                    "Show information about all Students",
+                    "Change Course for Student",
+                    "Change name of Subject",
+                    "Check if Subject exists",
+                    "Show each Students current Teacher",
+                    "Show all Students of specific Subject",
+                    "Write data to Database",
+                    "Quit"
+                ));
 
-            Console.WriteLine("\n");
+            switch (choise)
+            {
+                case "Show information about all Students":
+                    ShowAllStudents();
+                    MainMenu();
+                    break;
+                case "Change Course for Student":
+                    ChangeCourse();
+                    MainMenu();
+                    break;
+                case "Change name of Subject":
+                    ChangeSubjectName();
+                    MainMenu();
+                    break;
+                case "Check if Subject exists":
+                    CheckIfSubjectExists();
+                    MainMenu();
+                    break;
+                case "Show each Students current Teacher":
+                    GetTeachersForEachStudent();
+                    MainMenu();
+                    break;
+                case "Show all Students of specific Subject":
+                    GetStudentsFromSubject();
+                    MainMenu();
+                    break;
+                case "Write data to Database":
+                    WriteDataToDatabase();
+                    MainMenu();
+                    break;
+                case "Quit":
+                    break;
+            }
+        }
 
-            GetTeachersForEachStudent();
+        private static void ShowAllStudents()
+        {
+            var studentTable = new Table().Centered();
+            studentTable.AddColumn("Student Name");
+            studentTable.AddColumn("Student ID");
+            studentTable.AddColumn("Course");
+            studentTable.AddColumn("Subject");
+            studentTable.AddColumn("Teacher");
 
-            Console.WriteLine("");
+            using (var dbContext = new SchoolDbContext())
+            {
+                var dbData = (from student in dbContext.Students
+                              join course in dbContext.Courses
+                              on student.CourseID equals course.CourseID
+                              join subject in dbContext.Subjects
+                              on course.SubjectID equals subject.SubjectID
+                              join teacherSubject in dbContext.TeachersSubjects
+                              on subject.SubjectID equals teacherSubject.SubjectID
+                              join teacher in dbContext.Teachers
+                              on teacherSubject.TeacherID equals teacher.TeacherID
+                              select new
+                              {
+                                  student.StudentName,
+                                  student.StudentID,
+                                  Course = course.CourseName,
+                                  Subject = subject.SubjectName,
+                                  Teacher = teacher.TeacherName,
+                              });
 
-            CheckIfSubjectExists("Programming 2");
-            CheckIfSubjectExists("Object Oriented Programming");
 
-            ChangeSubjectName("Object Oriented Programming", "Programming 2");
+                foreach (var data in dbData)
+                {
+                    List<string> user = new List<string>()
+                    {
+                        data.StudentName,
+                        data.StudentID.ToString(),
+                        data.Course,
+                        data.Subject,
+                        data.Teacher
+                    };
 
-            CheckIfSubjectExists("Programming 2");
-            CheckIfSubjectExists("Object Oriented Programming");
+                    studentTable.AddRow(user.ToArray());
+                }
 
-            Console.WriteLine();
-            GetTeachersForEachStudent();
-            Console.WriteLine();
-            ChangeCourse(21, 6, 8);
-            Console.WriteLine();
-            GetTeachersForEachStudent();
-            Console.WriteLine();
+                AnsiConsole.Write(studentTable);
+            }
+
+            AnsiConsole.WriteLine("\n\tPress any key to return to the main menu.");
             Console.ReadKey();
+            Console.Clear();
         }
 
-        private static void ChangeCourse(int studentID, int oldCourseID, int newCourseID)
+        private static void ChangeCourse()
         {
             using (var dbContext = new SchoolDbContext())
             {
-                var student = dbContext.Students.FirstOrDefault(s => s.StudentID == studentID);
-                var oldCourse = dbContext.Courses.FirstOrDefault(c => c.CourseID == oldCourseID);
-                var newCourse = dbContext.Courses.FirstOrDefault(c => c.CourseID == newCourseID);
 
-                if (student == null) {
-                    Console.WriteLine("\tError: Student with ID = {0} was not found!", studentID);
-                }
-                else if (oldCourse == null)
-                {
-                    Console.WriteLine("\tError: Course with ID = {0} was not found!", oldCourseID);
-                } else if (newCourse == null)
-                {
-                    Console.WriteLine("\tError: Course with ID = {0} was not found!", newCourseID);
-                } else if (student.CourseID != oldCourse.CourseID)
-                {
-                    Console.WriteLine("\tError: Student {0} does not study {1}", student.StudentName, oldCourse.CourseName);
-                }
-                else
-                {
-                    student.Course = newCourse;
-                    dbContext.SaveChanges();
-                    Console.WriteLine("\tStudent {0}'s current course {1} was change to {2}",
-                        student.StudentName, oldCourse.CourseName, newCourse.CourseName);
-                }
+                var students = dbContext.Students.Select(s => s.StudentName).ToList();
+                var studentName = AnsiConsole.Prompt(new SelectionPrompt<string>()
+                .Title("Choose student.")
+                .AddChoices(students));
+                var student = dbContext.Students.FirstOrDefault(s => s.StudentName == studentName);
+
+                var courses = dbContext.Courses.Select(s => s.CourseName).ToList();
+                var courseName = AnsiConsole.Prompt(new SelectionPrompt<string>()
+                    .Title("Choose new course.")
+                    .AddChoices(courses));
+                var newCourse = dbContext.Courses.FirstOrDefault(c => c.CourseName == courseName);
+
+                student.Course = newCourse;
+                dbContext.SaveChanges();
+
+                AnsiConsole.WriteLine("\t{0} has changed course to {1}", studentName, courseName);
+                AnsiConsole.WriteLine("\t\nPress any key to return to the main menu.");
+                Console.ReadKey();
+                Console.Clear();
             }
         }
 
-        private static void ChangeSubjectName(string subjectNameToChange, string newSubjectName)
+        private static void ChangeSubjectName()
         {
             using (var dbContext = new SchoolDbContext())
             {
-                var subjectToChange = dbContext.Subjects.FirstOrDefault(s => s.SubjectName == subjectNameToChange);
-                if (subjectToChange != null)
-                {
-                    subjectToChange.SubjectName = newSubjectName;
-                    dbContext.SaveChanges();
-                    Console.WriteLine("\t{0} was successfully changed to {1}", subjectNameToChange, newSubjectName);
-                }
-                else
-                {
-                    Console.WriteLine("\tError: Subject {0} was not found!", subjectNameToChange);
-                }
+                var subjects = dbContext.Subjects.Select(s => s.SubjectName).ToList();
+                var subjectName = AnsiConsole.Prompt(new SelectionPrompt<string>()
+                .Title("Choose subject.")
+                .AddChoices(subjects));
+                var subject = dbContext.Subjects.FirstOrDefault(s => s.SubjectName == subjectName);
+
+                AnsiConsole.Write("New subject name: ");
+                var newSubjectName = Console.ReadLine();
+                subject.SubjectName = newSubjectName;
+                dbContext.SaveChanges();
+
+                AnsiConsole.WriteLine("The subject {0} has been changed to {1}", subjectName, newSubjectName);
+                AnsiConsole.WriteLine("\nPress any key to return to the main menu.");
+                Console.ReadKey();
+                Console.Clear();
             }
         }
 
-        private static void CheckIfSubjectExists(string subjectName)
+        private static void CheckIfSubjectExists()
         {
             using (var dbContext = new SchoolDbContext())
             {
-                bool isProgramming1 = dbContext.Subjects.Any(s => s.SubjectName == subjectName);
-                Console.WriteLine(
-                    isProgramming1 ?
-                    "\t{0} exist in Subjects" :
-                    "\t{0} does not exist in Subjects",
-                    subjectName
+                AnsiConsole.Write("Name to search: ");
+
+                var searchName = Console.ReadLine();
+                bool subject = dbContext.Subjects.Any(s => s.SubjectName == searchName);
+
+                AnsiConsole.WriteLine(
+                    subject ?
+                    "{0} does exist in Subjects" :
+                    "{0} does not exist in Subjects",
+                    searchName
                 );
+
+                AnsiConsole.WriteLine("\nPress any key to return to the main menu.");
+                Console.ReadKey();
+                Console.Clear();
             }
         }
 
         private static void GetTeachersForEachStudent()
         {
+            var studentTeacherTable = new Table().Centered();
+            studentTeacherTable.AddColumn("Student Name");
+            studentTeacherTable.AddColumn("Student ID");
+            studentTeacherTable.AddColumn("Teacher Name");
+            studentTeacherTable.AddColumn("Teacher ID");
+
             using (var dbContext = new SchoolDbContext())
             {
                 var studentAndTeacher = dbContext.Students
@@ -131,23 +224,53 @@ namespace Labb_2_LINQ
                             Teacher = t
                         }).ToList();
 
-                foreach (var student in studentAndTeacher)
+
+                foreach (var data in studentAndTeacher)
                 {
-                    Console.WriteLine("\t{0} is taught by {1}", student.Student.StudentName, student.Teacher.TeacherName);
+                    List<string> user = new List<string>()
+                    {
+                        data.Student.StudentName,
+                        data.Student.StudentID.ToString(),
+                        data.Teacher.TeacherName,
+                        data.Teacher.TeacherID.ToString(),
+                    };
+
+                    studentTeacherTable.AddRow(user.ToArray());
                 }
+
+                AnsiConsole.Write(studentTeacherTable);
+                AnsiConsole.WriteLine("\n\t\t\t\t\tPress any key to return to the main menu.");
+                Console.ReadKey();
+                Console.Clear();
             }
         }
 
-        private static void GetStudentsFromSubject(string subjectName)
+        private static void GetStudentsFromSubject()
         {
+            var studentSubjectTable = new Table().Centered();
+
             using (var dbContext = new SchoolDbContext())
             {
+                var subjects = dbContext.Subjects.Select(s => s.SubjectName).ToList();
+                var subjectName = AnsiConsole.Prompt(new SelectionPrompt<string>()
+                .Title("Choose subject.")
+                .AddChoices(subjects));
+
+                studentSubjectTable.AddColumn(subjectName + " Students");
+
                 var students = dbContext.Students
                     .Where(s => s.Course.Subject.SubjectName == subjectName).ToList();
 
-                Console.Write("\t{0} Sudents: ", subjectName);
-                Console.Write(string.Join(", ", students.Select(s => s.StudentName)));
+                foreach (var student in students)
+                {
+                    studentSubjectTable.AddRow(student.StudentName);
+                }
             }
+
+            AnsiConsole.Write(studentSubjectTable);
+            AnsiConsole.WriteLine("\n\t\t\t\t\tPress any key to return to the main menu.");
+            Console.ReadKey();
+            Console.Clear();
         }
 
         private static void WriteDataToDatabase()
@@ -156,13 +279,13 @@ namespace Labb_2_LINQ
             {
                 // Create teachers list of Teacher
                 List<Teacher> teachers = new List<Teacher>
-                {
-                    new Teacher { TeacherName = "John Smith" },
-                    new Teacher { TeacherName = "Jane Doe" },
-                    new Teacher { TeacherName = "Anna Gustafsson" },
-                    new Teacher { TeacherName = "Fredrik Einarsson" },
-                    new Teacher { TeacherName = "Gustaf Svensson" },
-                };
+            {
+                new Teacher { TeacherName = "John Smith" },
+                new Teacher { TeacherName = "Jane Doe" },
+                new Teacher { TeacherName = "Anna Gustafsson" },
+                new Teacher { TeacherName = "Fredrik Einarsson" },
+                new Teacher { TeacherName = "Gustaf Svensson" },
+            };
 
                 // Add Teacher from teachers list to the DbSet<Teacher>
                 dbContext.Teachers.AddRange(teachers);
@@ -189,36 +312,36 @@ namespace Labb_2_LINQ
 
                 // Create List of Students
                 var students = new List<Student>
-                {
-                    new Student { StudentName = "Alice", Course = mathCourse },
-                    new Student { StudentName = "Bob", Course = mathCourse },
-                    new Student { StudentName = "Charlie", Course = mathCourse },
-                    new Student { StudentName = "Dave", Course = englishCourse },
-                    new Student { StudentName = "Eve", Course = englishCourse },
-                    new Student { StudentName = "Frank", Course = englishCourse },
-                    new Student { StudentName = "Grace", Course = swedishCourse },
-                    new Student { StudentName = "Henry", Course = swedishCourse },
-                    new Student { StudentName = "Isabelle", Course = swedishCourse },
-                    new Student { StudentName = "Jack", Course = programmingCourse },
-                    new Student { StudentName = "Katie", Course = programmingCourse },
-                    new Student { StudentName = "Luke", Course = programmingCourse },
-                    new Student { StudentName = "Mary", Course = websiteDevCourse },
-                    new Student { StudentName = "Nick", Course = websiteDevCourse },
-                    new Student { StudentName = "Olivia", Course = websiteDevCourse },
-                };
+            {
+                new Student { StudentName = "Alice", Course = mathCourse },
+                new Student { StudentName = "Bob", Course = mathCourse },
+                new Student { StudentName = "Charlie", Course = mathCourse },
+                new Student { StudentName = "Dave", Course = englishCourse },
+                new Student { StudentName = "Eve", Course = englishCourse },
+                new Student { StudentName = "Frank", Course = englishCourse },
+                new Student { StudentName = "Grace", Course = swedishCourse },
+                new Student { StudentName = "Henry", Course = swedishCourse },
+                new Student { StudentName = "Isabelle", Course = swedishCourse },
+                new Student { StudentName = "Jack", Course = programmingCourse },
+                new Student { StudentName = "Katie", Course = programmingCourse },
+                new Student { StudentName = "Luke", Course = programmingCourse },
+                new Student { StudentName = "Mary", Course = websiteDevCourse },
+                new Student { StudentName = "Nick", Course = websiteDevCourse },
+                new Student { StudentName = "Olivia", Course = websiteDevCourse },
+            };
 
                 // Add Student from list Students to the DbSet<Student>
                 dbContext.Students.AddRange(students);
 
                 var teachersSubjects = new List<TeacherSubject>
-                {
-                    new TeacherSubject { Teacher = teachers[0], Subject = mathSubject },
-                    new TeacherSubject { Teacher = teachers[1], Subject = swedishSubject },
-                    new TeacherSubject { Teacher = teachers[2], Subject = englishSubject },
-                    new TeacherSubject { Teacher = teachers[3], Subject = programming1Subject },
-                    new TeacherSubject { Teacher = teachers[3], Subject = programming2Subject },
-                    new TeacherSubject { Teacher = teachers[4], Subject = websiteDevelopmentSubject },
-                };
+            {
+                new TeacherSubject { Teacher = teachers[0], Subject = mathSubject },
+                new TeacherSubject { Teacher = teachers[1], Subject = swedishSubject },
+                new TeacherSubject { Teacher = teachers[2], Subject = englishSubject },
+                new TeacherSubject { Teacher = teachers[3], Subject = programming1Subject },
+                new TeacherSubject { Teacher = teachers[3], Subject = programming2Subject },
+                new TeacherSubject { Teacher = teachers[4], Subject = websiteDevelopmentSubject },
+            };
 
                 dbContext.TeachersSubjects.AddRange(teachersSubjects);
 
@@ -227,4 +350,4 @@ namespace Labb_2_LINQ
             }
         }
     }
-}
+} 
