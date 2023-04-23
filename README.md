@@ -44,8 +44,5 @@ The available commands are:
 ## Contributors
 Theo Esberg
 
-## License
-This project is licensed under the MIT License - see the LICENSE.md file for details.
-
 ## Acknowledgments
 [Avancerad.Net](https://qlok.notion.site/6-Avancerad-NET-d7035129aa1f46608d36dc8333dd1ecd) for providing the course materials.
